@@ -33,7 +33,6 @@ Free-tier API quotas and burst-rate limits could not support continuous retrieva
   def _call_llm_with_retry(self, messages):
       return self.llm.invoke(messages)
 
-```
 
 ---
 
