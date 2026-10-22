@@ -11,7 +11,7 @@ venv/
 !.env.example
 
 # FAISS Vector Index & Local Storage
-faiss_index/
+faiss_indices/
 chat_history/
 *.index
 *.pkl
