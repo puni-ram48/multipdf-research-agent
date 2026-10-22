@@ -1,0 +1,57 @@
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.core.config import settings
+from app.core.logging import logger
+from app.api.v1.router import api_router
+
+# Import services to pre-warm models at server startup
+from app.services.embedding import embedding_service
+from app.services.pdf_parser import pdf_parser_service
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- STARTUP LOGIC ---
+    logger.info(f"Starting up {settings.PROJECT_NAME} backend...")
+    logger.info("Pre-warming embedding models into RAM...")
+    
+    # Pre-load embedding model into memory so user requests don't hit cold delays
+    embedding_service.get_embeddings()
+    
+    yield  # Application handles requests while sitting at yield
+    
+    # --- SHUTDOWN LOGIC ---
+    logger.info(f"Shutting down {settings.PROJECT_NAME} backend...")
+
+
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan  # Attach lifespan context manager
+)
+
+# CORS Setup (allows Streamlit frontend communication)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Mount API v1 router
+app.include_router(api_router, prefix=settings.API_V1_STR)
+
+
+@app.get("/health", tags=["Health"])
+async def health_check():
+    return {"status": "ok", "app": settings.PROJECT_NAME}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+
+# Environment Variables
+.env
+!.env.example
+
+# FAISS Vector Index & Local Storage
+faiss_index/
+chat_history/
+*.index
+*.pkl
+
+# Streamlit
+.streamlit/
+
+# IDE
+.vscode/
+.idea/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+check_missing_code.py
+setup_project.py
+test_groq.py

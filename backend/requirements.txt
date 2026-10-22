@@ -1,0 +1,31 @@
+# FastAPI Service Engine
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+pydantic>=2.6.0
+pydantic-settings>=2.2.0
+python-dotenv>=1.0.1
+python-multipart>=0.0.9
+
+# Document Intelligence & Parser Engine
+docling>=2.15.0
+pymupdf>=1.24.0          # Kept as ultra-fast raw fallback
+pdfplumber>=0.11.0       # Direct table fallback if needed
+
+# AI & RAG Orchestration (LangChain)
+langchain>=0.1.14
+langchain-community>=0.0.31
+langchain-core>=0.1.40
+langchain-text-splitters>=0.0.1
+langchain-google-genai>=1.0.1
+langchain-huggingface>=0.0.1
+
+# Embeddings & Vector Storage
+faiss-cpu>=1.8.0
+sentence-transformers>=2.6.1
+
+# Session Storage & Distributed Cache
+redis>=5.0.3
+
+# Testing & Client Tools
+pytest>=8.1.0
+httpx>=0.27.0
