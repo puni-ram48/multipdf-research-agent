@@ -1,6 +1,6 @@
 import os
 import shutil
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 
@@ -53,6 +53,47 @@ class VectorStoreService:
             embeddings,
             allow_dangerous_deserialization=True
         )
+
+    def similarity_search_with_boost(
+        self, 
+        session_id: str, 
+        query: str, 
+        k: int = settings.SEARCH_TOP_K
+    ) -> List[Document]:
+        """
+        Performs similarity search with section priority boosting:
+        Reranks retrieved chunks so Abstract, Introduction, and Conclusion sections
+        are prioritized when answering broad overview or summary questions.
+        """
+        db = self.load_index(session_id)
+        if db is None:
+            return []
+
+        # 1. Perform L2 similarity search with distance scores
+        results_with_scores: List[Tuple[Document, float]] = db.similarity_search_with_score(
+            query, k=k
+        )
+
+        boosted_docs: List[Tuple[Document, float]] = []
+
+        # 2. Apply section priority multipliers to distance scores (lower distance = higher similarity)
+        priority_sections = {"abstract", "introduction", "conclusion", "methodology", "summary"}
+        boost_weight = getattr(settings, "SECTION_BOOST_WEIGHT", 1.5)
+
+        for doc, score in results_with_scores:
+            section = str(doc.metadata.get("section", "")).lower()
+            doc_type = str(doc.metadata.get("type", "")).lower()
+
+            adjusted_score = score
+            if any(p in section for p in priority_sections) or doc_type == "abstract":
+                adjusted_score = score / boost_weight  # Lower distance score increases rank
+
+            boosted_docs.append((doc, adjusted_score))
+
+        # 3. Sort by adjusted distance score ascending
+        boosted_docs.sort(key=lambda x: x[1])
+
+        return [doc for doc, _ in boosted_docs]
 
     def delete_index(self, session_id: str) -> bool:
         """Deletes a session FAISS index folder."""
