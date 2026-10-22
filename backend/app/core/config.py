@@ -1,25 +1,35 @@
 import os
-from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "MultiPDF Research Agent"
     API_V1_STR: str = "/api/v1"
-    
-    # Model Configurations
-    GEMINI_API_KEY: Optional[str] = None
-    GROQ_API_KEY: Optional[str] = None
+
+    # API Keys
+    GROQ_API_KEY: str
+    GEMINI_API_KEY: str = "dummy_key_for_pydantic"
+
+    # Embedding Models
     PRIMARY_EMBED_MODEL: str = "BAAI/bge-large-en-v1.5"
     FALLBACK_EMBED_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
-    
-    # Vector DB / FAISS Config
+
+    # Ingestion & Performance Settings
     INDEX_STORAGE_PATH: str = "./faiss_indices"
-    
-    # Retrieval Hyperparameters
+    NUM_CPU_THREADS: int = 8
+    ENABLE_ADAPTIVE_OCR: bool = True
+
+    # Retrieval Settings
     RETRIEVAL_K: int = 7
     MAX_MEMORY_TURNS: int = 6
-    
+
+    # PostgreSQL Database Configuration
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = "mysecretpassword"
+    POSTGRES_DB: str = "multipdf_db"
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: int = 5432
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

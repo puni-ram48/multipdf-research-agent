@@ -15,12 +15,17 @@ from app.services.pdf_parser import pdf_parser_service
 async def lifespan(app: FastAPI):
     # --- STARTUP LOGIC ---
     logger.info(f"Starting up {settings.PROJECT_NAME} backend...")
-    logger.info("Pre-warming embedding models into RAM...")
+    logger.info("Pre-warming models into RAM to eliminate ingestion cold-starts...")
     
-    # Pre-load embedding model into memory so user requests don't hit cold delays
+    # 1. Pre-load BAAI embedding model into RAM
     embedding_service.get_embeddings()
     
-    yield  # Application handles requests while sitting at yield
+    # 2. Pre-warm Docling digital layout converter instance
+    _ = pdf_parser_service.digital_converter
+    
+    logger.info("✅ All core models pre-warmed successfully!")
+    
+    yield  # Application processes HTTP requests
     
     # --- SHUTDOWN LOGIC ---
     logger.info(f"Shutting down {settings.PROJECT_NAME} backend...")
