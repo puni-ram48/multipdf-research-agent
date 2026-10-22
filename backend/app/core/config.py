@@ -19,9 +19,12 @@ class Settings(BaseSettings):
     NUM_CPU_THREADS: int = 8
     ENABLE_ADAPTIVE_OCR: bool = True
 
-    # Retrieval Settings
-    RETRIEVAL_K: int = 7
-    MAX_MEMORY_TURNS: int = 6
+    # Retrieval & RAG Hyperparameters
+    RETRIEVAL_K: int = 7    # Default K for standard specific questions
+    SEARCH_TOP_K: int = 12  # Expanded K for high-level summary / overview questions
+    QUERY_EXPANSION_ENABLED: bool = True     # Expands broad user queries into targeted sub-queries
+    SECTION_BOOST_WEIGHT: float = 1.5        # Priority weight multiplier for Abstract/Intro/Conclusion chunks
+    MAX_MEMORY_TURNS: int = 6         # Number of Q&A turns retained in conversation memory
 
     # PostgreSQL Database Configuration
     POSTGRES_USER: str = "postgres"
