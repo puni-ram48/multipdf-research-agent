@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.logging import logger
 from app.api.v1.router import api_router
+from app.db.database import init_db
 
 # Import services to pre-warm models at server startup
 from app.services.embedding import embedding_service
@@ -15,18 +16,22 @@ from app.services.pdf_parser import pdf_parser_service
 async def lifespan(app: FastAPI):
     # --- STARTUP LOGIC ---
     logger.info(f"Starting up {settings.PROJECT_NAME} backend...")
+
+    # 1. Initialize PostgreSQL Database Schemas
+    try:
+        init_db()
+        logger.info("✅ PostgreSQL database schemas initialized successfully.")
+    except Exception as e:
+        logger.warning(f"⚠️ Database connection deferred: {e}")
+
+    # 2. Pre-warm models into RAM
     logger.info("Pre-warming models into RAM to eliminate ingestion cold-starts...")
-    
-    # 1. Pre-load BAAI embedding model into RAM
     embedding_service.get_embeddings()
-    
-    # 2. Pre-warm Docling digital layout converter instance
     _ = pdf_parser_service.digital_converter
-    
     logger.info("✅ All core models pre-warmed successfully!")
-    
+
     yield  # Application processes HTTP requests
-    
+
     # --- SHUTDOWN LOGIC ---
     logger.info(f"Shutting down {settings.PROJECT_NAME} backend...")
 
@@ -36,7 +41,7 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     docs_url="/docs",
     redoc_url="/redoc",
-    lifespan=lifespan  # Attach lifespan context manager
+    lifespan=lifespan
 )
 
 # CORS Setup (allows Streamlit frontend communication)
