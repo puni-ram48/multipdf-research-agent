@@ -11,9 +11,40 @@ from langchain_groq import ChatGroq
 from app.core.config import settings
 from app.schemas.chat import SourceCitation, ChatResponse
 from app.services.vector_store import vector_store_service
+from app.db.database import SessionLocal
+from app.db.models import ChatSessionMessage
 
 # Load environment variables from .env file
 load_dotenv()
+
+
+def save_chat_turn_to_db(session_id: str, question: str, answer: str, score: Optional[float], citations: List[SourceCitation]) -> None:
+    """Persists a Q&A conversation turn, evaluation score, and citations to PostgreSQL."""
+    try:
+        db = SessionLocal()
+        citation_dicts = [
+            {
+                "source": c.source,
+                "page": c.page,
+                "section": c.section,
+                "type": c.type,
+                "layout": c.layout
+            }
+            for c in citations
+        ]
+
+        record = ChatSessionMessage(
+            session_id=session_id,
+            user_question=question,
+            assistant_answer=answer,
+            faithfulness_score=score,
+            citations=citation_dicts
+        )
+        db.add(record)
+        db.commit()
+        db.close()
+    except Exception as e:
+        print(f"⚠️ Failed to persist chat turn to PostgreSQL: {e}")
 
 
 class RAGEngineService:
@@ -28,9 +59,9 @@ class RAGEngineService:
     def add_to_memory(self, session_id: str, question: str, answer: str) -> None:
         if session_id not in self.session_memory:
             self.session_memory[session_id] = []
-        
+
         self.session_memory[session_id].append({"question": question, "answer": answer})
-        
+
         # Trim oldest turns if history exceeds max turns
         if len(self.session_memory[session_id]) > settings.MAX_MEMORY_TURNS:
             self.session_memory[session_id] = self.session_memory[session_id][-settings.MAX_MEMORY_TURNS:]
@@ -192,6 +223,15 @@ Answer:""",
                         layout=layout
                     )
                 )
+
+        # 7. Persist conversation turn to PostgreSQL
+        save_chat_turn_to_db(
+            session_id=session_id,
+            question=question,
+            answer=answer,
+            score=faithfulness,
+            citations=citations
+        )
 
         return ChatResponse(
             question=question,
