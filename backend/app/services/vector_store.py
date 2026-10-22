@@ -19,17 +19,27 @@ class VectorStoreService:
 
     def build_index(self, session_id: str, chunks: List[Document]) -> FAISS:
         """
-        Builds a new FAISS vector store index from document chunks and saves it locally.
-        Clears any existing index for the given session ID.
+        Builds a new FAISS vector store or appends new document chunks 
+        to an existing session index.
         """
         index_path = self._get_session_index_path(session_id)
-        if os.path.exists(index_path):
-            shutil.rmtree(index_path)
-
         embeddings = embedding_service.get_embeddings()
-        vector_store = FAISS.from_documents(chunks, embedding=embeddings)
-        vector_store.save_local(index_path)
-        return vector_store
+
+        # If an index already exists for this session, append new chunks
+        if os.path.exists(os.path.join(index_path, "index.faiss")):
+            existing_vector_store = FAISS.load_local(
+                index_path,
+                embeddings,
+                allow_dangerous_deserialization=True
+            )
+            existing_vector_store.add_documents(chunks)
+            existing_vector_store.save_local(index_path)
+            return existing_vector_store
+        else:
+            # Create a brand new index if none exists
+            vector_store = FAISS.from_documents(chunks, embedding=embeddings)
+            vector_store.save_local(index_path)
+            return vector_store
 
     def load_index(self, session_id: str) -> Optional[FAISS]:
         """Loads an existing session FAISS vector store index if available."""
