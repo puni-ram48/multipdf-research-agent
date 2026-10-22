@@ -35,8 +35,8 @@ class ChunkerService:
     @staticmethod
     def detect_section(text: str) -> str:
         """Infer logical paper section from text if header metadata is missing."""
-        lower = text.lower()
-        if "abstract" in lower[:500]:
+        lower = text.lower()[:400]
+        if "abstract" in lower:
             return "Abstract"
         if any(w in lower for w in ["introduction", "background"]):
             return "Introduction"
@@ -48,7 +48,7 @@ class ChunkerService:
             return "Results"
         if any(w in lower for w in ["discussion", "analysis", "ablation"]):
             return "Discussion"
-        if any(w in lower for w in ["conclusion", "future work"]):
+        if any(w in lower for w in ["conclusion", "future work", "summary", "limitation"]):
             return "Conclusion"
         if any(w in lower for w in ["reference", "bibliography"]):
             return "References"
@@ -57,7 +57,7 @@ class ChunkerService:
     def split_documents(self, documents: List[Document]) -> List[Document]:
         """
         Splits documents into indexable chunks:
-        - Priority documents (abstract, keywords) are kept whole.
+        - Priority documents (abstract, keywords) are kept whole and tagged.
         - Docling body documents are split by Markdown headers then character size.
         """
         priority_chunks: List[Document] = []
@@ -66,6 +66,7 @@ class ChunkerService:
         for doc in documents:
             doc_type = doc.metadata.get("type", "")
             if doc_type in ("abstract", "keywords"):
+                doc.metadata["section"] = "Abstract"
                 priority_chunks.append(doc)
             else:
                 body_documents.append(doc)
@@ -79,7 +80,7 @@ class ChunkerService:
                 # Re-attach parent metadata (source, filename, etc.)
                 for md_doc in md_splits:
                     md_doc.metadata.update(doc.metadata)
-                    
+
                     # Extract highest header found into metadata section
                     section_name = (
                         md_doc.metadata.get("Header 3")
@@ -89,6 +90,10 @@ class ChunkerService:
                     )
                     md_doc.metadata["section"] = section_name
 
+                    # Explicitly tag abstract/intro chunks for retriever section boosting
+                    if section_name in ("Abstract", "Introduction") or "abstract" in section_name.lower():
+                        md_doc.metadata["type"] = "abstract"
+
                 # Stage 2: Sub-split large Markdown blocks
                 sub_chunks = self.body_splitter.split_documents(md_splits)
                 final_body_chunks.extend(sub_chunks)
@@ -97,8 +102,10 @@ class ChunkerService:
                 # Direct Recursive split fallback if text is not Markdown formatted
                 fallback_chunks = self.body_splitter.split_documents([doc])
                 for chunk in fallback_chunks:
-                    if "section" not in chunk.metadata:
-                        chunk.metadata["section"] = self.detect_section(chunk.page_content)
+                    section_name = self.detect_section(chunk.page_content)
+                    chunk.metadata["section"] = section_name
+                    if section_name in ("Abstract", "Introduction"):
+                        chunk.metadata["type"] = "abstract"
                 final_body_chunks.extend(fallback_chunks)
 
         # Priority chunks (abstract/keywords) are indexed first for higher relevance
