@@ -50,7 +50,6 @@ def save_chat_turn_to_db(session_id: str, question: str, answer: str, score: Opt
 class RAGEngineService:
     def __init__(self):
         # In-memory session conversation history buffer
-        # In a distributed setup, this can be swapped with Redis
         self.session_memory: Dict[str, List[Dict[str, str]]] = {}
 
     def get_memory(self, session_id: str) -> List[Dict[str, str]]:
@@ -80,11 +79,20 @@ class RAGEngineService:
         return "\n".join(lines)
 
     @staticmethod
+    def is_broad_summary_query(question: str) -> bool:
+        """Detects if user is asking for a broad paper summary, abstract, or core contribution."""
+        keywords = {
+            "summary", "summarize", "abstract", "contribution", "contributions",
+            "main goal", "objective", "overview", "what is this paper about", "key findings"
+        }
+        q_lower = question.lower()
+        return any(kw in q_lower for kw in keywords)
+
+    @staticmethod
     def compute_faithfulness_score(answer: Any, context: Any) -> float:
         """
         Computes answer grounding faithfulness score (fraction of answer keywords in context).
         """
-        # Convert list/non-string answer to string safely
         if isinstance(answer, list):
             answer_text = " ".join(
                 str(item.get("text", item)) if isinstance(item, dict) else str(item)
@@ -135,9 +143,20 @@ class RAGEngineService:
                 faithfulness_score=None
             )
 
-        # 1. Retrieve top-K relevant document chunks
-        retriever = db.as_retriever(search_kwargs={"k": settings.RETRIEVAL_K})
-        source_docs = retriever.invoke(question)
+        # 1. Determine retrieval depth based on query intent (Expanded K vs. Standard K)
+        if self.is_broad_summary_query(question):
+            retrieval_k = getattr(settings, "SEARCH_TOP_K", 12)
+            # Use section priority boosting to fetch Abstract & Introduction chunks first
+            source_docs = vector_store_service.similarity_search_with_boost(
+                session_id=session_id,
+                query=question,
+                k=retrieval_k
+            )
+        else:
+            retrieval_k = getattr(settings, "RETRIEVAL_K", 7)
+            retriever = db.as_retriever(search_kwargs={"k": retrieval_k})
+            source_docs = retriever.invoke(question)
+
         context = "\n\n".join(d.page_content for d in source_docs)
 
         # 2. Format conversation history
@@ -152,6 +171,7 @@ class RAGEngineService:
             template="""You are an expert research assistant. Use ONLY the context below to answer the question about the research paper(s).
 {history_block}
 Guidelines:
+- If asked for a summary, abstract, or main contribution, synthesize key goals and novelty thoroughly using the provided context.
 - If the answer involves metrics, numbers, or key results — quote them exactly.
 - State the section (Abstract, Methodology, Results, Conclusion) the answer originates from.
 - For comparison questions, address each paper separately before comparing.
@@ -188,7 +208,6 @@ Answer:""",
 
         response = self._invoke_chain(rag_chain, question)
 
-        # Ensure answer is converted to a string if response.content is a list
         if isinstance(response.content, list):
             answer = " ".join(
                 str(part.get("text", part)) if isinstance(part, dict) else str(part)
